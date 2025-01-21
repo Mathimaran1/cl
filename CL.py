@@ -1,8 +1,12 @@
+from flask import Flask, request, jsonify
 import openai
 
-# Set the Groq API base URL and your API key
+# Set up the Groq API base URL and API key
 openai.api_base = "https://api.groq.com/openai/v1"
 openai.api_key = "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"
+
+# Flask app
+app = Flask(__name__)
 
 # Initial knowledge about Composite Labs and Monad
 initial_context = """
@@ -23,44 +27,41 @@ You are an expert on Composite Labs and Monad. Provide concise, accurate, and re
 Answer queries in a professional manner, sticking to the scope of Composite Labs and Monad.
 """
 
-conversation_history = [
-    {"role": "system", "content": initial_context}
-]
+conversation_history = [{"role": "system", "content": initial_context}]
+
+# Route for the chatbot
+@app.route("/chat", methods=["POST"])
+def chat():
+    user_input = request.json.get("message")
+    if not user_input:
+        return jsonify({"error": "No message provided"}), 400
+
+    # Add user input to the conversation history
+    conversation_history.append({"role": "user", "content": user_input})
+
+    try:
+        # Get a response from the Groq API
+        response = openai.ChatCompletion.create(
+            model="llama-3.3-70b-versatile",  # Replace with the actual model name
+            messages=conversation_history,
+            temperature=0.5,
+            max_tokens=256,
+            top_p=1.0,
+        )
+        assistant_message = response["choices"][0]["message"]["content"]
+        conversation_history.append({"role": "assistant", "content": assistant_message})
+
+        return jsonify({"response": assistant_message})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
-def chatbot():
-    print("Chatbot is ready to discuss Composite Labs and Monad! Type 'exit' to end the chat.\n")
-
-    while True:
-        # Get user input
-        user_input = input("You: ")
-        if user_input.lower() == "exit":
-            print("Chatbot: Goodbye!")
-            break
-
-        # Add user's input to the conversation history
-        conversation_history.append({"role": "user", "content": user_input})
-
-        try:
-            # Call the Groq API for chat completion using a Llama model
-            response = openai.ChatCompletion.create(
-                model="llama-3.3-70b-versatile",  # Use an accessible Llama model
-                messages=conversation_history,
-                temperature=0.5,
-                max_tokens=256,
-                top_p=1.0
-            )
-
-            # Extract and print the assistant's response
-            assistant_message = response["choices"][0]["message"]["content"]
-            print(f"Chatbot: {assistant_message}")
-
-            # Add the assistant's response to the conversation history
-            conversation_history.append({"role": "assistant", "content": assistant_message})
-
-        except Exception as e:
-            print(f"Chatbot: Sorry, something went wrong. ({e})")
+# Welcome route
+@app.route("/", methods=["GET"])
+def welcome():
+    return "Welcome to the Composite Labs and Monad chatbot API. Use the /chat endpoint to interact with the bot."
 
 
 if __name__ == "__main__":
-    chatbot()
+    app.run(host="0.0.0.0", port=10000)
